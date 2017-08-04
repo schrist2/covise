@@ -281,6 +281,7 @@ const char reprojMeshGeo[] =
 MultiChannelDrawer::MultiChannelDrawer(bool flipped)
 : m_flipped(flipped)
 , m_mode(MultiChannelDrawer::ReprojectMesh)
+, m_frameNum(0)
 {
    int numChannels = coVRConfig::instance()->numChannels();
    for (int i=0; i<numChannels; ++i) {
@@ -331,10 +332,12 @@ void MultiChannelDrawer::update() {
    const osg::Matrix &scale = cover->getObjectsScale()->getMatrix();
    const osg::Matrix model = scale * transform;
 
-   auto updateView = [&model](ChannelData &cd, int i, bool second) {
+   auto updateView = [&model, this](ChannelData &cd, int i, bool second) {
 
        const channelStruct &chan = coVRConfig::instance()->channels[i];
-       const bool left = chan.stereoMode == osg::DisplaySettings::LEFT_EYE || (second && chan.stereoMode == osg::DisplaySettings::QUAD_BUFFER);
+       const bool left = chan.stereoMode == osg::DisplaySettings::LEFT_EYE
+                         || (second && chan.stereoMode == osg::DisplaySettings::QUAD_BUFFER)
+                         || (chan.stereoMode == osg::DisplaySettings::ANAGLYPHIC && m_frameNum % 2 == 0);
        const osg::Matrix &view = left ? chan.leftView : chan.rightView;
        const osg::Matrix &proj = left ? chan.leftProj : chan.rightProj;
        cd.curModel = model;
@@ -605,6 +608,8 @@ void MultiChannelDrawer::swapFrame() {
       cd.depthTex->getImage()->dirty();
       cd.colorTex->getImage()->dirty();
    }
+
+   m_frameNum++;
 }
 
 void MultiChannelDrawer::updateMatrices(int idx, const osg::Matrix &model, const osg::Matrix &view, const osg::Matrix &proj) {

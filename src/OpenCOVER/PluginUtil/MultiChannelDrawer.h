@@ -106,6 +106,7 @@ private:
    std::vector<ChannelData> m_channelData;
    bool m_flipped;
    Mode m_mode;
+   unsigned int m_frameNum;
 };
 
 }
