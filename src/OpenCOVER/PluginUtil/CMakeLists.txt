@@ -1,6 +1,7 @@
 # OpenCOVER PluginUtil (coOpenPluginUtil)
 USING(BOOST)
 USING(CG optional)
+USING(GLEW)
 
 IF(NOT OPENSCENEGRAPH_FOUND)
   RETURN()

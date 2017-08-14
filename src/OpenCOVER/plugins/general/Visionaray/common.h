@@ -22,7 +22,6 @@
 #include <visionaray/texture/texture.h>
 #include <visionaray/aligned_vector.h>
 #include <visionaray/bvh.h>
-#include <visionaray/cpu_buffer_rt.h>
 #include <visionaray/generic_material.h>
 #include <visionaray/scheduler.h>
 #include <visionaray/spot_light.h>
@@ -30,6 +29,8 @@
 #ifdef __CUDACC__
 #include <visionaray/pixel_unpack_buffer_rt.h>
 #endif
+
+#include "multi_channel_rt.h"
 
 
 //-------------------------------------------------------------------------------------------------
@@ -57,8 +58,7 @@ using texture_map = std::map<std::string, host_tex_type>;
 
 using host_ray_type = visionaray::basic_ray<visionaray::simd::float4>;
 using host_bvh_type = visionaray::index_bvh<triangle_type>;
-using host_render_target_type = visionaray::cpu_buffer_rt<visionaray::PF_RGBA32F,
-                                                          visionaray::PF_DEPTH24_STENCIL8>;
+using host_render_target_type = visionaray::multi_channel_rt;
 using host_sched_type = visionaray::tiled_sched<host_ray_type>;
 
 #ifdef __CUDACC__

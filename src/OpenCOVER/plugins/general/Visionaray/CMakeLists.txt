@@ -26,12 +26,14 @@ set(HEADERS
     kernels/tex_coords_kernel.h
     common.h
     drawable.h
+    multi_channel_rt.h
     scene_monitor.h
     state.h
     visionaray_plugin.h
 )
 
 set(SOURCES
+    multi_channel_rt.cpp
     scene_monitor.cpp
     visionaray_plugin.cpp
 )

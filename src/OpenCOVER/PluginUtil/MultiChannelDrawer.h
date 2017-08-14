@@ -24,6 +24,7 @@ namespace opencover
 struct ChannelData {
     int channelNum;
     bool second;
+	unsigned int frameNum;
     osg::Matrix curProj, curView, curModel;
     osg::Matrix imgProj, imgView, imgModel;
     osg::Matrix newProj, newView, newModel;
@@ -52,6 +53,7 @@ struct ChannelData {
     ChannelData(int channel=-1)
         : channelNum(channel)
         , second(false)
+		, frameNum(0)
     {
     }
 };
@@ -80,6 +82,11 @@ public:
    Mode mode() const;
    void setMode(Mode mode);
 
+   void setColorPixelFormat(GLenum colorInternalFormat);
+   void setDepthPixelFormat(GLenum depthInternalFormat);
+
+
+
    //! from now on, draw with current RGBA and depth data for all views
    void swapFrame();
    //! set matrices corresponding to RGBA and depth data for view idx
@@ -106,7 +113,6 @@ private:
    std::vector<ChannelData> m_channelData;
    bool m_flipped;
    Mode m_mode;
-   unsigned int m_frameNum;
 };
 
 }

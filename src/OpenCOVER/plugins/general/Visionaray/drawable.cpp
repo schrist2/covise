@@ -47,6 +47,8 @@
 #include "state.h"
 #include "two_array_ref.h"
 
+#include <PluginUtil/MultiChannelDrawer.h>
+
 namespace visionaray
 {
     //-------------------------------------------------------------------------------------------------
@@ -477,7 +479,7 @@ namespace visionaray
                     visibility_visitor visible(geode);
                     geode->accept(visible);
 
-                    // TODO: scene is no longer acquired in drawImplementation
+                    // TODO: scene is no longer acquired in draw
                     /*                if (!visible.is_visible())
                                       {
                     // no other children will be visible, either
@@ -888,8 +890,9 @@ namespace visionaray
     struct drawable::impl
     {
 
-        impl()
+        impl(opencover::MultiChannelDrawer* drawer)
             : host_sched(0)
+			, vparams(drawer)
 #ifdef __CUDACC__
             , device_sched(8, 8)
 #endif
@@ -925,12 +928,6 @@ namespace visionaray
 
         scene::Monitor                                          scene_monitor;
 
-        enum eye
-        {
-            Left,
-            Right
-        };
-
         struct viewing_params
         {
             host_render_target_type host_rt;
@@ -939,10 +936,18 @@ namespace visionaray
 #endif
             mat4 view_matrix;
             mat4 proj_matrix;
+			mat4 prevViewMatrix;
+			mat4 prevProjMatrix;
             int width;
             int height;
             unsigned frame_num = 0;
             bool need_clear_frame = false;
+
+			viewing_params(opencover::MultiChannelDrawer* drawer) :
+				host_rt(drawer)
+			{
+
+			}
 
             void clear_frame()
             {
@@ -958,9 +963,7 @@ namespace visionaray
             }
         };
 
-        viewing_params eye_params[2]; // for left and right eye
-
-        eye current_eye = Right;
+        viewing_params vparams;
 
         size_t total_frame_num = 0;
 
@@ -1064,6 +1067,49 @@ namespace visionaray
 
     void drawable::impl::update_viewing_params(osg::DisplaySettings::StereoMode mode)
     {
+		auto osg_cam = opencover::coVRConfig::instance()->channels[0].camera;
+		auto osg_viewport = osg_cam->getViewport();
+		int w = osg_viewport->width();
+		int h = osg_viewport->height();
+
+		auto view = osg_cast(vparams.host_rt.getModelMatrix() * vparams.host_rt.getViewMatrix());
+		auto proj = osg_cast(vparams.host_rt.getProjMatrix());
+
+		bool isAnaglyphic = mode == osg::DisplaySettings::StereoMode::ANAGLYPHIC;
+		bool left = vparams.frame_num % 2 == 1;
+
+		if (state->data_var == Dynamic || state->algo != algo_current || state->device != device
+			|| state->num_bounces != num_bounces || scene_monitor.need_clear_frame()
+			|| ((vparams.view_matrix != view || vparams.proj_matrix != proj) && !isAnaglyphic)
+			|| ((vparams.prevViewMatrix != view || vparams.prevProjMatrix != proj) && isAnaglyphic && !left)
+			|| vparams.width != w || vparams.height != h)
+		{
+			vparams.frame_num = 0;
+
+			if (state->algo == Pathtracing)
+			{
+				vparams.need_clear_frame = true;
+			}
+		}
+
+
+		vparams.prevViewMatrix = vparams.view_matrix;
+		vparams.prevProjMatrix = vparams.proj_matrix;
+
+		vparams.view_matrix = view;
+		vparams.proj_matrix = proj;
+
+		if (vparams.width != w || vparams.height != h || true)
+		{
+			vparams.width = w;
+			vparams.height = h;
+			vparams.host_rt.resize(w, h);
+#ifdef __CUDACC__
+			vparams.device_rt.resize(w, h);
+#endif
+		}
+
+		/*
         current_eye = Right; // default if no stereo
 
         if (opencover::coVRConfig::instance()->stereoState())
@@ -1099,7 +1145,7 @@ namespace visionaray
                 break;
             }
         }
-
+		
         auto osg_cam = opencover::coVRConfig::instance()->channels[0].camera;
 
         // Matrices
@@ -1162,6 +1208,7 @@ namespace visionaray
             vparams.device_rt.resize(w, h);
 #endif
         }
+		*/
     }
 
     bool drawable::impl::scene_valid()
@@ -1294,8 +1341,6 @@ namespace visionaray
     template <typename Scheduler, typename RenderTarget, typename Intersector, typename KParams>
     void drawable::impl::call_kernel(Scheduler &sched, RenderTarget &rt, Intersector &intersector, const KParams &params)
     {
-        auto &vparams = eye_params[current_eye];
-
         // Simple scheduler params
         auto sparams = make_sched_params(vparams.view_matrix, vparams.proj_matrix, rt);
 
@@ -1349,7 +1394,8 @@ namespace visionaray
         {
             pathtracing::kernel<KParams> k;
             k.params = params;
-            sched.frame(k, sparams_isect_jittered, ++vparams.frame_num);
+
+			sched.frame(k, sparams_isect_jittered, ++vparams.frame_num);
         }
     }
 
@@ -1358,9 +1404,9 @@ namespace visionaray
     //
 
     drawable::drawable()
-        : impl_(new impl)
+        : impl_(new impl(this))
     {
-        setSupportsDisplayList(false);
+
     }
 
     drawable::~drawable()
@@ -1506,30 +1552,10 @@ namespace visionaray
     }
 
     //-------------------------------------------------------------------------------------------------
-    // Private osg::Drawable interface
-    //
-
-    drawable *drawable::cloneType() const
-    {
-        return new drawable;
-    }
-
-    osg::Object *drawable::clone(const osg::CopyOp &op) const
-    {
-        return new drawable(*this, op);
-    }
-
-    drawable::drawable(drawable const &rhs, osg::CopyOp const &op)
-        : osg::Drawable(rhs, op)
-    {
-        setSupportsDisplayList(false);
-    }
-
-    //-------------------------------------------------------------------------------------------------
     // Draw implementation
     //
 
-    void drawable::drawImplementation(osg::RenderInfo &info) const
+    void drawable::draw(osg::RenderInfo &info) const
     {
         if (!impl_->state || !impl_->dev_state)
             return;
@@ -1626,7 +1652,7 @@ namespace visionaray
             glDisable(GL_FRAMEBUFFER_SRGB);
         }
 
-        auto &vparams = impl_->eye_params[impl_->current_eye];
+		auto &vparams = impl_->vparams;
         if (vparams.need_clear_frame)
             vparams.clear_frame();
 

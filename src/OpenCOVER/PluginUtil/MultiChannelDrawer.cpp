@@ -5,7 +5,7 @@
 
  * License: LGPL 2+ */
 
-#include "MultiChannelDrawer.h"
+#include <GL/glew.h>
 
 #include <cassert>
 
@@ -17,6 +17,8 @@
 
 #include <cover/coVRConfig.h>
 #include <cover/coVRPluginSupport.h>
+
+#include "MultiChannelDrawer.h"
 
 //#define INSTANCED
 
@@ -281,7 +283,6 @@ const char reprojMeshGeo[] =
 MultiChannelDrawer::MultiChannelDrawer(bool flipped)
 : m_flipped(flipped)
 , m_mode(MultiChannelDrawer::ReprojectMesh)
-, m_frameNum(0)
 {
    int numChannels = coVRConfig::instance()->numChannels();
    for (int i=0; i<numChannels; ++i) {
@@ -332,12 +333,12 @@ void MultiChannelDrawer::update() {
    const osg::Matrix &scale = cover->getObjectsScale()->getMatrix();
    const osg::Matrix model = scale * transform;
 
-   auto updateView = [&model, this](ChannelData &cd, int i, bool second) {
+   auto updateView = [&model](ChannelData &cd, int i, bool second) {
 
        const channelStruct &chan = coVRConfig::instance()->channels[i];
        const bool left = chan.stereoMode == osg::DisplaySettings::LEFT_EYE
                          || (second && chan.stereoMode == osg::DisplaySettings::QUAD_BUFFER)
-                         || (chan.stereoMode == osg::DisplaySettings::ANAGLYPHIC && m_frameNum % 2 == 0);
+                         || (chan.stereoMode == osg::DisplaySettings::ANAGLYPHIC && cd.frameNum % 2 == 1);
        const osg::Matrix &view = left ? chan.leftView : chan.rightView;
        const osg::Matrix &proj = left ? chan.leftProj : chan.rightProj;
        cd.curModel = model;
@@ -579,8 +580,6 @@ void MultiChannelDrawer::initChannelData(ChannelData &cd) {
 
    createGeometry(cd);
 
-   //std::cout << "vp: " << vp->width() << "," << vp->height() << std::endl;
-
    osg::MatrixTransform *imageMat = new osg::MatrixTransform();
    imageMat->setMatrix(osg::Matrix::identity());
    imageMat->addChild(cd.geode);
@@ -597,6 +596,59 @@ void MultiChannelDrawer::clearChannelData() {
     }
 }
 
+
+void MultiChannelDrawer::setColorPixelFormat(GLenum colorInternalFormat) {
+	GLenum colorFormat = 0;
+	GLenum colorType = 0;
+	switch (colorInternalFormat) {
+		case GL_RGBA8:
+			colorFormat = GL_RGBA;
+			colorType = GL_UNSIGNED_BYTE;
+			break;
+		case GL_RGBA32F:
+			colorFormat = GL_RGBA;
+			colorType = GL_FLOAT;
+			break;
+		default:
+			throw std::exception("Color pixel format not supported!");
+	}
+
+	for (int i = 0; i < m_channelData.size(); i++) {
+		ChannelData& cd = m_channelData[i];
+		osg::Image* cimg = cd.colorTex->getImage();
+
+		cimg->setInternalTextureFormat(colorInternalFormat);
+		cimg->allocateImage(cimg->s(), cimg->t(), 1, colorFormat, colorType);
+	}
+}
+
+
+void MultiChannelDrawer::setDepthPixelFormat(GLenum depthInternalFormat) {
+	GLenum depthFormat = 0;
+	GLenum depthType = 0;
+	switch (depthInternalFormat) {
+		case GL_DEPTH_COMPONENT32F:
+			depthFormat = GL_DEPTH_COMPONENT;
+			depthType = GL_FLOAT;
+			break;
+		case GL_DEPTH24_STENCIL8:
+			depthFormat = GL_DEPTH_STENCIL;
+			depthType = GL_UNSIGNED_INT_24_8;
+			break;
+		default:
+			throw std::exception("Depth pixel format not supported!");
+	}
+
+	for (int i = 0; i < m_channelData.size(); i++) {
+		ChannelData& cd = m_channelData[i];
+		osg::Image* dimg = cd.depthTex->getImage();
+
+		dimg->setInternalTextureFormat(depthInternalFormat);
+		dimg->allocateImage(dimg->s(), dimg->t(), 1, depthFormat, depthType);
+	}
+}
+
+
 void MultiChannelDrawer::swapFrame() {
    for (size_t s=0; s<m_channelData.size(); ++s) {
       ChannelData &cd = m_channelData[s];
@@ -607,9 +659,9 @@ void MultiChannelDrawer::swapFrame() {
 
       cd.depthTex->getImage()->dirty();
       cd.colorTex->getImage()->dirty();
-   }
 
-   m_frameNum++;
+	  cd.frameNum++;
+   }
 }
 
 void MultiChannelDrawer::updateMatrices(int idx, const osg::Matrix &model, const osg::Matrix &view, const osg::Matrix &proj) {
@@ -686,6 +738,9 @@ void MultiChannelDrawer::resizeView(int idx, int w, int h, GLenum depthFormat) {
             cd.pixelOffset->set(osg::Vec2((w+1)%2*0.5f, (h+1)%2*0.5f));
         }
     }
+
+	setColorPixelFormat(cd.colorTex->getImage()->getInternalTextureFormat());
+	setDepthPixelFormat(cd.depthTex->getImage()->getInternalTextureFormat());
 }
 
 void MultiChannelDrawer::reproject(int idx, const osg::Matrix &model, const osg::Matrix &view, const osg::Matrix &proj) {

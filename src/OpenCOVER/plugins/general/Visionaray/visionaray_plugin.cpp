@@ -22,6 +22,7 @@
 #include <cover/coVRPluginSupport.h>
 #include <cover/coVRTui.h>
 #include <cover/VRViewer.h>
+#include <cover/coVRConfig.h>
 
 #include <OpenVRUI/coCheckboxGroup.h>
 #include <OpenVRUI/coCheckboxMenuItem.h>
@@ -64,7 +65,6 @@ namespace visionaray
         }
 
         osg::Node::NodeMask objroot_node_mask;
-        osg::ref_ptr<osg::Geode> geode;
         osg::ref_ptr<drawable> drawable_ptr;
 
         struct
@@ -692,11 +692,8 @@ namespace visionaray
     Visionaray::~Visionaray()
     {
         opencover::cover->getObjectsRoot()->setNodeMask(impl_->objroot_node_mask);
-        if (impl_->geode)
-        {
-            impl_->geode->removeDrawable(impl_->drawable_ptr);
-            opencover::cover->getScene()->removeChild(impl_->geode);
-        }
+
+		opencover::cover->getScene()->removeChild(impl_->drawable_ptr);
     }
 
     bool Visionaray::init()
@@ -709,13 +706,9 @@ namespace visionaray
 
         impl_->init_ui();
 
-        impl_->geode = new osg::Geode;
-        impl_->geode->setName("Visionaray");
-        impl_->geode->addDrawable(impl_->drawable_ptr);
+		impl_->objroot_node_mask = opencover::cover->getObjectsRoot()->getNodeMask();
 
-        impl_->objroot_node_mask = opencover::cover->getObjectsRoot()->getNodeMask();
-
-        opencover::cover->getScene()->addChild(impl_->geode);
+		opencover::cover->getScene()->addChild(impl_->drawable_ptr);
 
         return true;
     }
@@ -743,6 +736,8 @@ namespace visionaray
         }
 
         impl_->state->animation_frame = opencover::coVRAnimationManager::instance()->getAnimationFrame();
+
+		impl_->drawable_ptr->draw(info);
     }
 
     void Visionaray::expandBoundingSphere(osg::BoundingSphere &bs)

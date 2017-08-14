@@ -15,6 +15,8 @@
 #include <osg/BoundingSphere>
 #include <osg/Drawable>
 
+#include <PluginUtil/MultiChannelDrawer.h>
+
 namespace osg
 {
     class Sequence;
@@ -26,7 +28,7 @@ namespace visionaray
     struct render_state;
     struct debug_state;
 
-    class drawable : public osg::Drawable
+    class drawable : public opencover::MultiChannelDrawer
     {
     public:
         drawable();
@@ -46,17 +48,11 @@ namespace visionaray
         // but keep the Visionaray data structures intact
         void set_suppress_rendering(bool enable);
 
+		void draw(osg::RenderInfo &info) const;
+
     private:
         struct impl;
         std::unique_ptr<impl> impl_;
-
-    private:
-        // osg::Drawable interface
-
-        drawable *cloneType() const;
-        osg::Object *clone(const osg::CopyOp &op) const;
-        drawable(drawable const &rhs, osg::CopyOp const &op = osg::CopyOp::SHALLOW_COPY);
-        void drawImplementation(osg::RenderInfo &info) const;
     };
 
 } // namespace visionaray
