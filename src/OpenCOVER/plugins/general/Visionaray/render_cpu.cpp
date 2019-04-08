@@ -17,9 +17,10 @@
 #include "renderer.h"
 
 void render_cpu(
-        const visionaray::index_bvh<visionaray::basic_triangle<3, float>>::bvh_ref* pbegin,
-        const visionaray::index_bvh<visionaray::basic_triangle<3, float>>::bvh_ref* pend,
+        const visionaray::index_bvh<visionaray::index_bvh<visionaray::basic_triangle<3, float>>::bvh_inst>::bvh_ref* pbegin,
+        const visionaray::index_bvh<visionaray::index_bvh<visionaray::basic_triangle<3, float>>::bvh_inst>::bvh_ref* pend,
         two_array_ref<visionaray::aligned_vector<visionaray::vec3>> const& normals,
+        two_array_ref<visionaray::aligned_vector<visionaray::vec3>> const& shading_normals,
         two_array_ref<visionaray::aligned_vector<visionaray::vec2>> const& tex_coords,
         two_array_ref<material_list> const& materials,
         two_array_ref<visionaray::aligned_vector<visionaray::vec3>> const& colors,
@@ -46,6 +47,7 @@ void render_cpu(
         pbegin,
         pend,
         normals,
+        shading_normals,
         tex_coords,
         materials,
         colors,
@@ -57,13 +59,10 @@ void render_cpu(
         clear_color,
         vec4(1.0f));
 
-    mask_intersector<
-        two_array_ref<tex_coord_list>,
-        two_array_ref<texture_list>> intersector;
+    mask_intersector<two_array_ref<tex_coord_list>, two_array_ref<texture_list>> intersector;
 
     intersector.tex_coords = kparams.tex_coords;
     intersector.textures = kparams.textures;
-
 
     auto sparams = make_sched_params(view_matrix,
                                      proj_matrix,

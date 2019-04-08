@@ -24,9 +24,10 @@ namespace visionaray
 }
 
 void pathtrace_cpu(
-        const visionaray::index_bvh<visionaray::basic_triangle<3, float>>::bvh_ref* pbegin,
-        const visionaray::index_bvh<visionaray::basic_triangle<3, float>>::bvh_ref* pend,
+        const visionaray::index_bvh<visionaray::index_bvh<visionaray::basic_triangle<3, float>>::bvh_inst>::bvh_ref* pbegin,
+        const visionaray::index_bvh<visionaray::index_bvh<visionaray::basic_triangle<3, float>>::bvh_inst>::bvh_ref* pend,
         two_array_ref<visionaray::aligned_vector<visionaray::vec3>> const& normals,
+        two_array_ref<visionaray::aligned_vector<visionaray::vec3>> const& shading_normals,
         two_array_ref<visionaray::aligned_vector<visionaray::vec2>> const& tex_coords,
         two_array_ref<material_list> const& materials,
         two_array_ref<visionaray::aligned_vector<visionaray::vec3>> const& colors,

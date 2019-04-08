@@ -69,7 +69,6 @@ static char *strcasestr(char *source, char *target)
 
 int main(int argc, char *argv[])
 {
-
 #ifdef _WIN32
     // disable "debug dialog": it prevents the application from exiting,
     // but still all sockets remain open
@@ -309,7 +308,7 @@ int main(int argc, char *argv[])
     //MARK2("COVER STARTING UP on host %s with pid %d", my_hostname, getpid());
 
     int dl = covise::coCoviseConfig::getInt("COVER.DebugLevel", 0);
-
+    std::cout << "OpenCOVER sizeof vector: " << sizeof(std::vector<int>) << std::endl;
     if (dl >= 1)
         fprintf(stderr, "OpenCOVER: Starting up\n\n");
     opencover::OpenCOVER *Renderer = NULL;

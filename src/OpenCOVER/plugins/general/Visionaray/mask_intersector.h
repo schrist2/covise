@@ -71,7 +71,7 @@ namespace visionaray
 
             array<vector<4, float>, simd::num_elements<T>::value> tex_colors;
 
-            for (unsigned i = 0; i < simd::num_elements<T>::value; ++i)
+            for (unsigned volatile i = 0; i < simd::num_elements<T>::value; ++i)
             {
                 if (!hrs[i].hit)
                 {

@@ -664,6 +664,8 @@ namespace visionaray
 
         opencover::VRViewer::instance()->culling(false);
 
+        std::cout << "Visionaray sizeof vector: " << sizeof(std::vector<int>) << std::endl;
+
         std::cout << "Init Visionaray Plugin!!" << std::endl;
 
         impl_->init_ui();
