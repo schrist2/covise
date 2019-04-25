@@ -164,7 +164,6 @@ namespace visionaray
         void init(
             osg::Vec3Array const *in_vertices,
             osg::Vec3Array const *in_normals,
-            osg::Vec3Array const *in_shading_normals,
             osg::Vec4Array const *in_colors,
             osg::Vec2Array const *in_tex_coords,
             unsigned in_geom_id,
@@ -176,7 +175,6 @@ namespace visionaray
         {
             in.vertices = in_vertices;
             in.normals = in_normals;
-            in.shading_normals = in_shading_normals;
             in.colors = in_colors;
             in.tex_coords = in_tex_coords;
             in.geom_id = in_geom_id;
@@ -293,7 +291,6 @@ namespace visionaray
         {
             osg::Vec3Array const *vertices = nullptr;
             osg::Vec3Array const *normals = nullptr;
-            osg::Vec3Array const *shading_normals = nullptr;
             osg::Vec4Array const *colors = nullptr;
             osg::Vec2Array const *tex_coords = nullptr;
             unsigned geom_id;
@@ -382,6 +379,7 @@ namespace visionaray
             node_mask_map &node_masks,
             scene::Monitor &mon,
             std::vector<host_bvh_type>& bvhs,
+            index_bvh<host_bvh_type::bvh_inst>& top_level_bvh,
             std::vector<size_t>& instance_indices,
             std::vector<mat4>& instance_transforms,
             const std::vector<osg::Sequence *> &managed_seqs = {},
@@ -399,6 +397,7 @@ namespace visionaray
             , scene_monitor_(mon)
             , current_transform_(mat4::identity())
             , bvhs_(bvhs)
+            , top_level_bvh_(top_level_bvh)
             , instance_indices_(instance_indices)
             , instance_transforms_(instance_transforms)
             , managed_seqs_(managed_seqs)
@@ -441,7 +440,11 @@ namespace visionaray
 
                 current_transform_ = current_transform_ * osg_cast(transform->asMatrixTransform()->getMatrix());
 
+                transform_nodes_list_.push_back(transform);
+
                 base_type::traverse(node);
+
+                transform_nodes_list_.pop_back();
 
                 current_transform_ = prev;
 
@@ -489,8 +492,6 @@ namespace visionaray
                     {
                         continue;
                     }
-
-                    auto node_shading_normals = node_normals;
 
                     osg::Vec4Array *node_colors = nullptr;
                     if (geom->getColorArray() && geom->getColorArray()->getType() == osg::Array::Vec4ArrayType)
@@ -587,7 +588,7 @@ namespace visionaray
 
                     // transform
 
-                    auto world_transform = osg::computeLocalToWorld(getNodePath());
+                    //auto world_transform = osg::computeLocalToWorld(getNodePath());
 
                     // geometry
 
@@ -598,7 +599,6 @@ namespace visionaray
                     tif.init(
                         node_vertices,
                         node_normals,
-                        node_shading_normals,
                         node_colors,
                         node_tex_coords,
                         geom_id,
@@ -618,6 +618,8 @@ namespace visionaray
 
                     instance_indices_.push_back(bvhs_.size() - 1);
                     instance_transforms_.push_back(current_transform_);
+
+                    scene_monitor_.add_observable(std::make_shared<scene::Transform>(transform_nodes_list_, top_level_bvh_, bvhs_.size() - 1));
                 }
 
                 if (triangles_.size() > num_triangles)
@@ -665,8 +667,10 @@ namespace visionaray
         osg::Texture2D *parent_tex_ = nullptr;
         osg::Image *parent_img_ = nullptr;
 
+        std::vector<osg::Transform*> transform_nodes_list_;
         mat4 current_transform_ = mat4::identity();
         std::vector<host_bvh_type>& bvhs_;
+        index_bvh<host_bvh_type::bvh_inst>& top_level_bvh_;
         std::vector<size_t>& instance_indices_;
         std::vector<mat4>& instance_transforms_;
     };
@@ -896,6 +900,8 @@ namespace visionaray
         std::vector<host_bvh_type>                              host_bvhs;
         std::vector<host_bvh_type::bvh_inst>                    host_instances;
         index_bvh<host_bvh_type::bvh_inst>                      host_top_level_bvh;
+        std::vector<size_t>                                     instance_indices;
+        std::vector<mat4>                                       instance_transforms;
         texture_map                                             textures;
         host_sched_type                                         host_sched;
         mask_intersector<
@@ -1253,10 +1259,6 @@ namespace visionaray
         // static data + sequences
         int num_frames = 1 + max_seq_len;
 
-
-        std::vector<size_t> instance_indices;
-        std::vector<mat4> instance_transforms;
-
         impl_->triangles.clear();
         impl_->normals.clear();
         impl_->shading_normals.clear();
@@ -1265,6 +1267,9 @@ namespace visionaray
         impl_->materials.clear();
         impl_->texture_refs.clear();
         impl_->host_bvhs.clear();
+        impl_->host_instances.clear();
+        impl_->instance_indices.clear();
+        impl_->instance_transforms.clear();
 
         impl_->triangles.resize(num_frames);
         impl_->normals.resize(num_frames);
@@ -1287,8 +1292,9 @@ namespace visionaray
                 impl_->node_masks,
                 impl_->scene_monitor,
                 impl_->host_bvhs,
-                instance_indices,
-                instance_transforms,
+                impl_->host_top_level_bvh,
+                impl_->instance_indices,
+                impl_->instance_transforms,
                 seqs
                 );
        opencover::cover->getObjectsRoot()->accept(visitor); 
@@ -1310,8 +1316,9 @@ namespace visionaray
                     impl_->node_masks,
                     impl_->scene_monitor,
                     impl_->host_bvhs,
-                    instance_indices,
-                    instance_transforms,
+                    impl_->host_top_level_bvh,
+                    impl_->instance_indices,
+                    impl_->instance_transforms,
                     seqs
                     );
 
@@ -1322,11 +1329,11 @@ namespace visionaray
             }
         }
 
-        impl_->host_instances.resize(instance_indices.size());
-        for (size_t i = 0; i < instance_indices.size(); ++i)
+        impl_->host_instances.resize(impl_->instance_indices.size());
+        for (size_t i = 0; i < impl_->instance_indices.size(); ++i)
         {
-            size_t index = instance_indices[i];
-            impl_->host_instances[i] = impl_->host_bvhs[index].inst(instance_transforms[i]);
+            size_t index = impl_->instance_indices[i];
+            impl_->host_instances[i] = impl_->host_bvhs[index].inst(impl_->instance_transforms[i]);
         }
 
         impl_->host_top_level_bvh = build<index_bvh<host_bvh_type::bvh_inst>>(
@@ -1338,13 +1345,6 @@ namespace visionaray
         impl_->outlines = std::vector<gl::bvh_outline_renderer>(impl_->triangles.size()); // outlines are not copyable!
         impl_->outlines_initialized.resize(impl_->triangles.size());
         std::fill(impl_->outlines_initialized.begin(), impl_->outlines_initialized.end(), false);
-
-        auto r = impl_->host_top_level_bvh.ref();
-        auto p0 = r.primitive(0);
-        for (int i = 0; i < p0.num_indices(); i++) {
-            auto p = p0.primitive(i);
-            printf("[%04i]: v1:%.2f %.2f %.2f, geom_id:%04i, prim_id:%04i\n", i, p.v1.x, p.v1.y, p.v1.z, p.geom_id, p.prim_id);
-        }
 
         // Loop over all triangles, check if their
         // material is emissive, and if so, build
@@ -1468,8 +1468,8 @@ namespace visionaray
 
         // Update scene state
 
-        //impl_->scene_monitor.update();
-        //impl_->update_device_data(impl_->scene_monitor.update_bits());
+        impl_->scene_monitor.update();
+        impl_->update_device_data(impl_->scene_monitor.update_bits());
 
         light_list lights;
 

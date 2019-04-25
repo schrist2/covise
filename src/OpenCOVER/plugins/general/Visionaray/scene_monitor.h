@@ -51,6 +51,21 @@ namespace scene
         bool specular_;
     };
 
+    //-----------------------------------------------------
+
+    class Transform : public Observable
+    {
+    public:
+        Transform(std::vector<osg::Transform*> transform_nodes_list, visionaray::index_bvh<host_bvh_type::bvh_inst>& top_level_bvh, size_t bvh_index);
+
+        bool changed();
+        void visit();
+    private:
+        std::vector<osg::Transform*> transform_nodes_list_;
+        visionaray::index_bvh<host_bvh_type::bvh_inst>& top_level_bvh_;
+        size_t bvh_index_;
+        visionaray::mat4 current_transform_ = visionaray::mat4::identity();
+    };
 
     //-----------------------------------------------------
 
@@ -66,6 +81,7 @@ namespace scene
         static const unsigned UpdateMaterials  = 16;
         static const unsigned UpdateTextures   = 32;
         static const unsigned UpdateAreaLights = 64;
+        static const unsigned UpdateTransforms = 128;
 
     public:
 

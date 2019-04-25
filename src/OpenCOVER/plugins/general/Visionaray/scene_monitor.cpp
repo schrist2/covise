@@ -59,6 +59,39 @@ void Material::visit()
     specular_ = sp;
 }
 
+//-------------------------------------------------------------------------------------------------
+// Geometry observable
+//
+
+Transform::Transform(std::vector<osg::Transform*> transform_nodes_list, visionaray::index_bvh<host_bvh_type::bvh_inst>& top_level_bvh, size_t bvh_index)
+    : transform_nodes_list_(transform_nodes_list),
+    top_level_bvh_(top_level_bvh),
+    bvh_index_(bvh_index)
+{
+}
+
+bool Transform::changed()
+{
+    if (top_level_bvh_.num_primitives() <= bvh_index_) {
+        return false;
+    }
+
+    current_transform_ = visionaray::mat4::identity();
+    for (auto it = transform_nodes_list_.begin(); it != transform_nodes_list_.end(); it++) {
+        current_transform_ = current_transform_ * osg_cast((*it)->asMatrixTransform()->getMatrix());
+    }
+
+    return top_level_bvh_.primitive(bvh_index_).transform_inv() != visionaray::inverse(current_transform_);
+}
+
+void Transform::visit()
+{
+    if (top_level_bvh_.num_primitives() <= bvh_index_) {
+        return;
+    }
+    
+    top_level_bvh_.primitive(bvh_index_).set_transform_inv(visionaray::inverse(current_transform_));
+}
 
 //-------------------------------------------------------------------------------------------------
 // Monitor
@@ -84,6 +117,8 @@ void Monitor::update()
             // TODO: nicer implementation
             if (std::dynamic_pointer_cast<Material>(o) != nullptr)
                 update_bits_ |= UpdateMaterials;
+            else if (std::dynamic_pointer_cast<Transform>(o) != nullptr)
+                update_bits_ |= UpdateTransforms;
 
             o->visit();
         }

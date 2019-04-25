@@ -60,7 +60,12 @@ void pathtrace_cpu(
     intersector.tex_coords = kparams.tex_coords;
     intersector.textures = kparams.textures;
 
-    auto sparams = make_sched_params(pixel_sampler::jittered_blend_type{},
+    float alpha = 1.0f / ++frame_num;
+    pixel_sampler::jittered_blend_type blend_params;
+    blend_params.sfactor = alpha;
+    blend_params.dfactor = 1.0f - alpha;
+
+    auto sparams = make_sched_params(blend_params,
                                      view_matrix,
                                      proj_matrix,
                                      *rend,
